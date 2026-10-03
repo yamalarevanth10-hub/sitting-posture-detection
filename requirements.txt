@@ -1,0 +1,9 @@
+# Digital Wellness Monitor - Major Project Dependencies
+fastapi>=0.115.0
+uvicorn>=0.30.0
+jinja2>=3.1.4
+opencv-python>=4.10.0
+mediapipe>=1.0.0
+numpy>=1.26.0
+scipy>=1.14.0
+requests>=2.32.0

@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Digital Wellness Monitor | Sitting Posture & Eye Blink AI</title>
+  
+  <!-- Google Fonts: Inter & Outfit -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+
+  <!-- MediaPipe CDN dependencies for client-side processing -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+  
+  <!-- Chart.js for real-time telemetry graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" crossorigin="anonymous"></script>
+  <!-- Canvas Confetti -->
+  <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
+</head>
+<body class="dark-theme">
+  <!-- Audio Context / Synthesizer initialized on user click -->
+  <div class="app-layout">
+    
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <div class="brand-logo">
+          <div class="pulse-ring"></div>
+          <i class="fa-solid fa-person-burst"></i>
+        </div>
+        <div class="brand-info">
+          <h1>Digital Wellness Monitor</h1>
+          <span class="project-tag"><i class="fa-solid fa-graduation-cap"></i> Major Project Edition &bull; AI Ergonomics</span>
+        </div>
+      </div>
+
+      <div class="header-center">
+        <div class="session-clock-pill">
+          <i class="fa-regular fa-clock"></i>
+          <span class="clock-label">Session:</span>
+          <span id="session-timer" class="clock-time">00:00:00</span>
+        </div>
+        <div class="posture-status-pill good" id="header-posture-pill">
+          <span class="status-dot"></span>
+          <span id="header-status-text">INITIALIZING</span>
+        </div>
+      </div>
+
+      <div class="header-right">
+        <button id="btn-calibrate-quick" class="btn btn-primary" title="Calibrate upright baseline (Press C)">
+          <i class="fa-solid fa-crosshairs"></i> Calibrate [C]
+        </button>
+        <button id="btn-break-now" class="btn btn-secondary" title="Start 20-20-20 eye break (Press B)">
+          <i class="fa-solid fa-mug-hot"></i> Take Break
+        </button>
+        <button id="btn-stretches" class="btn btn-icon" title="Guided Desk Stretches">
+          <i class="fa-solid fa-person-walking"></i>
+        </button>
+        <button id="btn-sound-toggle" class="btn btn-icon active" title="Toggle Audio Alerts">
+          <i class="fa-solid fa-volume-high"></i>
+        </button>
+        <button id="btn-settings" class="btn btn-icon" title="Ergonomic Settings">
+          <i class="fa-solid fa-sliders"></i>
+        </button>
+        <button id="btn-export-report" class="btn btn-accent" title="Generate Session Viva Report">
+          <i class="fa-solid fa-file-invoice"></i> Report
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="main-content">
+      
+      <!-- Left Column: Video Feed & Real-time Canvas HUD -->
+      <section class="video-section">
+        <div class="video-container" id="video-wrapper">
+          <!-- Video element (hidden, feeding canvas) -->
+          <video id="webcam" playsinline autoplay muted></video>
+          
+          <!-- Primary interactive canvas overlay -->
+          <canvas id="overlay-canvas"></canvas>
+
+          <!-- Top HUD Overlay matching reference image -->
+          <div class="hud-top-bar" id="hud-top-bar">
+            <div class="hud-title-row">
+              <span class="hud-main-title">Digital Wellness Monitor | Sitting Posture Analysis</span>
+              <span class="hud-fps-badge" id="hud-fps">30 FPS</span>
+            </div>
+            <div class="hud-status-row">
+              <span class="hud-posture-badge good" id="hud-posture-text">POSTURE: GOOD (Upright & Aligned)</span>
+            </div>
+            <div class="hud-metrics-row">
+              <span class="hud-stat">Shoulder Tilt: <strong id="hud-shoulder">0.0 deg</strong></span>
+              <span class="hud-divider">|</span>
+              <span class="hud-stat">Head Tilt: <strong id="hud-head">0.0 deg</strong></span>
+              <span class="hud-divider">|</span>
+              <span class="hud-stat">Slouch Ratio: <strong id="hud-slouch">0.50 (Base: 0.50)</strong></span>
+            </div>
+          </div>
+
+          <!-- Bottom HUD Overlay matching reference image -->
+          <div class="hud-bottom-bar">
+            <div class="hud-action-hint">
+              <span class="key-badge">Press [C]</span> to Calibrate Upright Baseline | 
+              <span class="key-badge">Press [Space]</span> to Pause | 
+              <span class="key-badge">Press [B]</span> for 20-20-20 Break
+            </div>
+            <div class="hud-disclaimer">
+              * Non-diagnostic wellness feedback. Not for medical spinal evaluation.
+            </div>
+          </div>
+
+          <!-- Calibration Countdown Overlay -->
+          <div class="calibration-overlay" id="calibration-overlay">
+            <div class="calibration-box">
+              <i class="fa-solid fa-arrows-to-circle fa-beat"></i>
+              <h3>Calibrating Upright Baseline</h3>
+              <p>Please sit straight with shoulders level and look straight at the screen.</p>
+              <div class="countdown-circle" id="calib-countdown">3</div>
+            </div>
+          </div>
+
+          <!-- Slouch Warning Overlay Banner -->
+          <div class="posture-warning-banner" id="posture-warning-banner">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <div class="warning-text">
+              <strong>POOR POSTURE DETECTED!</strong>
+              <span>Please sit upright, pull your shoulders back, and level your neck.</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Camera Controls Toolbar -->
+        <div class="camera-toolbar">
+          <div class="toolbar-left">
+            <button id="btn-toggle-camera" class="btn btn-outline">
+              <i class="fa-solid fa-video-slash"></i> <span>Pause Camera</span>
+            </button>
+            <button id="btn-flip-camera" class="btn btn-outline" title="Mirror Camera Horizontal">
+              <i class="fa-solid fa-arrows-left-right"></i> Mirror
+            </button>
+            <button id="btn-toggle-mesh" class="btn btn-outline active" title="Show/Hide Geometric Visual Overlay">
+              <i class="fa-solid fa-bezier-curve"></i> HUD Overlay
+            </button>
+          </div>
+          <div class="toolbar-right">
+            <span class="calibration-indicator" id="calib-status-badge">
+              <i class="fa-solid fa-circle-check"></i> Calibrated (Base: 0.50)
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right Column: Ergonomics Telemetry & Interactive Cards -->
+      <section class="telemetry-section">
+        
+        <!-- Score Card & Live Posture Rating -->
+        <div class="telemetry-card score-card">
+          <div class="score-circle-wrapper">
+            <svg class="score-svg" viewBox="0 0 120 120">
+              <circle class="score-bg" cx="60" cy="60" r="50"></circle>
+              <circle class="score-progress" id="score-circle-bar" cx="60" cy="60" r="50"></circle>
+            </svg>
+            <div class="score-value-box">
+              <span id="score-number" class="score-number">95</span>
+              <span class="score-unit">%</span>
+            </div>
+          </div>
+          <div class="score-details">
+            <div class="score-title-group">
+              <h3>Ergonomic Health Score</h3>
+              <span class="rating-badge optimal" id="rating-badge">Optimal Alignment</span>
+            </div>
+            <p class="score-desc">Weighted index based on spinal alignment, head angle, slouch ratio, and blink rate.</p>
+            <div class="mini-progress-row">
+              <div class="mini-bar-item">
+                <span>Good Posture: <strong id="good-time-pct">94%</strong></span>
+                <div class="bar-track"><div class="bar-fill good" id="bar-good-pct" style="width: 94%"></div></div>
+              </div>
+              <div class="mini-bar-item">
+                <span>Slouch / Tilt: <strong id="bad-time-pct">6%</strong></span>
+                <div class="bar-track"><div class="bar-fill bad" id="bar-bad-pct" style="width: 6%"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-Time Metrics Grid -->
+        <div class="metrics-grid">
+          
+          <!-- Metric: Shoulder Tilt -->
+          <div class="metric-card" id="card-shoulder">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-solid fa-arrows-left-right-to-line"></i></span>
+              <span class="metric-name">Shoulder Tilt</span>
+              <span class="metric-badge good" id="badge-shoulder">Normal</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-shoulder-val">2.8°</span>
+              <span class="metric-sub">Limit: &lt; 4.5°</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-shoulder" style="width: 25%"></div>
+            </div>
+          </div>
+
+          <!-- Metric: Head Tilt -->
+          <div class="metric-card" id="card-head">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-solid fa-head-side-cough"></i></span>
+              <span class="metric-name">Head & Neck Tilt</span>
+              <span class="metric-badge good" id="badge-head">Level</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-head-val">2.0°</span>
+              <span class="metric-sub">Limit: &lt; 6.0°</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-head" style="width: 20%"></div>
+            </div>
+          </div>
+
+          <!-- Metric: Slouch Ratio -->
+          <div class="metric-card" id="card-slouch">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-solid fa-child-reaching"></i></span>
+              <span class="metric-name">Slouch Index</span>
+              <span class="metric-badge good" id="badge-slouch">Upright</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-slouch-val">0.48</span>
+              <span class="metric-sub" id="metric-slouch-base">Base: 0.50 (-4%)</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-slouch" style="width: 85%"></div>
+            </div>
+          </div>
+
+          <!-- Metric: Blink Rate -->
+          <div class="metric-card" id="card-blinks">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-regular fa-eye"></i></span>
+              <span class="metric-name">Eye Blink Rate</span>
+              <span class="metric-badge good" id="badge-blink">Healthy</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-bpm-val">16 <small>BPM</small></span>
+              <span class="metric-sub" id="metric-total-blinks">Total: 42 blinks</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-bpm" style="width: 75%"></div>
+            </div>
+          </div>
+
+          <!-- Metric: Eye Aspect Ratio (EAR) -->
+          <div class="metric-card" id="card-ear">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-solid fa-eye-dropper"></i></span>
+              <span class="metric-name">Eye Ratio (EAR)</span>
+              <span class="metric-badge good" id="badge-ear">Eyes Open</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-ear-val">0.28</span>
+              <span class="metric-sub">Blink Thresh: 0.20</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-ear" style="width: 70%"></div>
+            </div>
+          </div>
+
+          <!-- Metric: Fatigue & Eye Strain -->
+          <div class="metric-card" id="card-fatigue">
+            <div class="metric-header">
+              <span class="metric-icon"><i class="fa-solid fa-battery-half"></i></span>
+              <span class="metric-name">Visual Fatigue</span>
+              <span class="metric-badge good" id="badge-fatigue">Low</span>
+            </div>
+            <div class="metric-body">
+              <span class="metric-val" id="metric-fatigue-val">Alert</span>
+              <span class="metric-sub" id="metric-fatigue-sub">Normal blink rhythm</span>
+            </div>
+            <div class="metric-bar">
+              <div class="metric-bar-fill" id="bar-fatigue" style="width: 20%"></div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Break & Habit Timers Card -->
+        <div class="telemetry-card break-timers-card">
+          <div class="card-section-title">
+            <i class="fa-solid fa-hourglass-half"></i> Ergonomic Health Timers
+          </div>
+          <div class="timers-row">
+            
+            <!-- 20-20-20 Rule Timer -->
+            <div class="timer-box">
+              <div class="timer-info">
+                <h4>20-20-20 Eye Break</h4>
+                <p>Look at an object 20ft away for 20 sec</p>
+              </div>
+              <div class="timer-display" id="timer-202020-display">20:00</div>
+              <button class="btn btn-sm btn-outline" id="btn-quick-eye-break">Start 20s Break</button>
+            </div>
+
+            <!-- Sedentary / Prolonged Sitting Timer -->
+            <div class="timer-box">
+              <div class="timer-info">
+                <h4>Continuous Sitting</h4>
+                <p>Stand up & stretch every 45 min</p>
+              </div>
+              <div class="timer-display" id="timer-sedentary-display">00:00</div>
+              <span class="timer-sub-text">Goal: &lt; 45m continuous</span>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Real-Time Telemetry Chart -->
+        <div class="telemetry-card chart-card">
+          <div class="chart-header">
+            <div class="chart-title">
+              <i class="fa-solid fa-chart-line"></i> Real-Time Ergonomics Telemetry
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="legend-dot score-dot"></span> Posture Score</span>
+              <span class="legend-item"><span class="legend-dot blink-dot"></span> Blink Rate (BPM)</span>
+            </div>
+          </div>
+          <div class="chart-canvas-wrapper">
+            <canvas id="telemetryChart"></canvas>
+          </div>
+        </div>
+
+      </section>
+    </main>
+
+  </div>
+
+  <!-- MODAL: 20-20-20 Eye Relaxation Guide -->
+  <div class="modal-backdrop" id="modal-break">
+    <div class="modal-container break-modal-box">
+      <div class="break-modal-header">
+        <i class="fa-solid fa-eye-slash fa-beat-fade"></i>
+        <h2>20-20-20 Eye Relief Break</h2>
+        <p>Rest your eye ciliary muscles: Look at an object 20 feet (6m) away.</p>
+      </div>
+
+      <div class="breathing-circle-wrapper">
+        <div class="breathing-outer-ring">
+          <div class="breathing-circle" id="breathing-circle">
+            <span id="break-countdown-number">20</span>
+            <small id="breathing-instruction">Breathe In & Focus Far</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="break-tips">
+        <div class="tip-item"><i class="fa-solid fa-check"></i> Look out of a window or across the room</div>
+        <div class="tip-item"><i class="fa-solid fa-check"></i> Blink gently to re-lubricate cornea</div>
+        <div class="tip-item"><i class="fa-solid fa-check"></i> Roll your shoulders and relax your jaw</div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btn-skip-break">Skip Break</button>
+        <button class="btn btn-primary" id="btn-complete-break">Complete Break</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ergonomic Stretches Guide -->
+  <div class="modal-backdrop" id="modal-stretches">
+    <div class="modal-container stretch-modal-box">
+      <div class="modal-header">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-person-walking"></i>
+          <div>
+            <h2>Desk Ergonomics & Guided Stretches</h2>
+            <p>6 clinical exercises to relieve text-neck, back pain, and eye strain.</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btn-close-stretches">&times;</button>
+      </div>
+
+      <div class="stretches-grid">
+        <!-- Stretch 1: Chin Tuck -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Neck Relief</div>
+          <h4>1. Chin Tucks</h4>
+          <p>Sit tall, pull your chin straight back toward your spine as if making a double chin. Hold 5s. Repeat 5 times.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Deep Cervical Flexors</span>
+        </div>
+
+        <!-- Stretch 2: Shoulder Shrug & Roll -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Shoulders</div>
+          <h4>2. Shoulder Rolls</h4>
+          <p>Inhale and shrug shoulders up toward ears. Roll them backward and down in a circular motion 10 times.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Trapezius & Rhomboids</span>
+        </div>
+
+        <!-- Stretch 3: Chest Opener -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Thoracic</div>
+          <h4>3. Seated Chest Opener</h4>
+          <p>Clasp hands behind your head or back. Gently squeeze shoulder blades together and open your chest to the ceiling.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Pectorals & Spine Extensors</span>
+        </div>
+
+        <!-- Stretch 4: Seated Spinal Twist -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Spine</div>
+          <h4>4. Seated Torso Twist</h4>
+          <p>Place right hand on left knee. Inhale to lengthen spine, exhale and gently rotate torso to the left. Switch sides.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Thoracic Rotators</span>
+        </div>
+
+        <!-- Stretch 5: Wrist & Forearm Flex -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Arms & Wrists</div>
+          <h4>5. Wrist Flexor Stretch</h4>
+          <p>Extend arm forward with palm facing out. Use other hand to gently pull fingers back toward forearm for 15s.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Carpal Tunnel & Flexors</span>
+        </div>
+
+        <!-- Stretch 6: Eye Palming -->
+        <div class="stretch-card">
+          <div class="stretch-badge">Eyes</div>
+          <h4>6. Eye Palming Warmth</h4>
+          <p>Rub hands together vigorously until warm. Cup warm palms gently over closed eyes without pressing. Breathe 20s.</p>
+          <span class="target-muscles"><i class="fa-solid fa-bullseye"></i> Extraocular & Ciliary Muscles</span>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary" id="btn-done-stretches">Done Stretching</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Settings -->
+  <div class="modal-backdrop" id="modal-settings">
+    <div class="modal-container settings-modal-box">
+      <div class="modal-header">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-sliders"></i>
+          <div>
+            <h2>Algorithm & Alert Settings</h2>
+            <p>Customize detection sensitivity, timer intervals, and notifications.</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btn-close-settings">&times;</button>
+      </div>
+
+      <div class="settings-form">
+        <!-- Section: Posture Thresholds -->
+        <div class="settings-group">
+          <h3><i class="fa-solid fa-ruler-combined"></i> Posture Thresholds</h3>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Shoulder Tilt Tolerance</span>
+              <small>Maximum tilt angle before alerting</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="range" id="setting-shoulder-tilt" min="2" max="10" step="0.5" value="4.5">
+              <span class="val-display" id="disp-shoulder-tilt">4.5°</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Head Tilt Tolerance</span>
+              <small>Maximum lateral neck angle before alerting</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="range" id="setting-head-tilt" min="3" max="15" step="0.5" value="6.0">
+              <span class="val-display" id="disp-head-tilt">6.0°</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Slouch Sensitivity</span>
+              <small>Allowed percentage drop below baseline</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="range" id="setting-slouch-sens" min="0.05" max="0.30" step="0.01" value="0.15">
+              <span class="val-display" id="disp-slouch-sens">15%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Eye & Blink Detection -->
+        <div class="settings-group">
+          <h3><i class="fa-regular fa-eye"></i> Eye Blink & Fatigue</h3>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Eye Aspect Ratio (EAR) Threshold</span>
+              <small>Values below this register a blink</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="range" id="setting-ear-thresh" min="0.15" max="0.28" step="0.01" value="0.21">
+              <span class="val-display" id="disp-ear-thresh">0.21</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>20-20-20 Break Interval</span>
+              <small>Minutes between eye strain reminders</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="number" id="setting-break-interval" min="5" max="60" value="20" class="input-num">
+              <span class="val-unit">min</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-label">
+              <span>Prolonged Sitting Alert</span>
+              <small>Continuous sitting time limit</small>
+            </div>
+            <div class="setting-input-wrap">
+              <input type="number" id="setting-sedentary-interval" min="15" max="120" value="45" class="input-num">
+              <span class="val-unit">min</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section: Feedback & Audio -->
+        <div class="settings-group">
+          <h3><i class="fa-solid fa-volume-high"></i> Alerts & Feedback</h3>
+          
+          <div class="setting-toggle-row">
+            <label class="toggle-label" for="toggle-audio-alerts">
+              <span>Web Audio Chimes</span>
+              <small>Play subtle alert tones when posture drops</small>
+            </label>
+            <input type="checkbox" id="toggle-audio-alerts" checked class="switch">
+          </div>
+
+          <div class="setting-toggle-row">
+            <label class="toggle-label" for="toggle-voice-alerts">
+              <span>Voice Speech Prompts</span>
+              <small>Spoken reminders ("Please sit upright", etc.)</small>
+            </label>
+            <input type="checkbox" id="toggle-voice-alerts" checked class="switch">
+          </div>
+
+          <div class="setting-toggle-row">
+            <label class="toggle-label" for="toggle-desktop-notif">
+              <span>Browser Desktop Notifications</span>
+              <small>Alert even when the tab is in background</small>
+            </label>
+            <input type="checkbox" id="toggle-desktop-notif" class="switch">
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-test-sound">Test Sound</button>
+        <button class="btn btn-secondary" id="btn-reset-defaults">Reset Defaults</button>
+        <button class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Session Viva Report & Export -->
+  <div class="modal-backdrop" id="modal-report">
+    <div class="modal-container report-modal-box">
+      <div class="modal-header">
+        <div class="title-with-icon">
+          <i class="fa-solid fa-file-invoice"></i>
+          <div>
+            <h2>Session Ergonomic Viva Report</h2>
+            <p>Comprehensive telemetry summary for project defense and personal tracking.</p>
+          </div>
+        </div>
+        <button class="btn-close" id="btn-close-report">&times;</button>
+      </div>
+
+      <div class="report-content" id="printable-report">
+        <!-- Report Header -->
+        <div class="report-meta-header">
+          <div class="meta-col">
+            <span class="meta-label">Project:</span>
+            <strong>Digital Wellness Monitor (Sitting Posture & Blink AI)</strong>
+          </div>
+          <div class="meta-col">
+            <span class="meta-label">Date & Time:</span>
+            <strong id="rep-date-time">-</strong>
+          </div>
+          <div class="meta-col">
+            <span class="meta-label">Monitoring Duration:</span>
+            <strong id="rep-duration">00:00:00</strong>
+          </div>
+        </div>
+
+        <!-- Grade Banner -->
+        <div class="report-grade-banner">
+          <div class="grade-symbol" id="rep-grade">A+</div>
+          <div class="grade-info">
+            <h3 id="rep-grade-title">Excellent Ergonomic Discipline</h3>
+            <p id="rep-grade-comment">High posture adherence with regular blinking and balanced alignment.</p>
+          </div>
+          <div class="grade-metric-pill">
+            <span>Overall Score:</span>
+            <strong id="rep-avg-score">95%</strong>
+          </div>
+        </div>
+
+        <!-- Telemetry Breakdown Grid -->
+        <div class="report-stats-grid">
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">Good Posture Time</span>
+            <strong class="rep-stat-val text-green" id="rep-good-pct">94%</strong>
+          </div>
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">Slouched / Forward Head</span>
+            <strong class="rep-stat-val text-red" id="rep-slouch-pct">4%</strong>
+          </div>
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">Asymmetric Tilt</span>
+            <strong class="rep-stat-val text-amber" id="rep-tilt-pct">2%</strong>
+          </div>
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">Total Eye Blinks</span>
+            <strong class="rep-stat-val text-cyan" id="rep-total-blinks">142</strong>
+          </div>
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">Avg Blink Frequency</span>
+            <strong class="rep-stat-val text-cyan" id="rep-avg-bpm">15.8 BPM</strong>
+          </div>
+          <div class="rep-stat-box">
+            <span class="rep-stat-label">20-20-20 Breaks Taken</span>
+            <strong class="rep-stat-val text-purple" id="rep-breaks-count">2</strong>
+          </div>
+        </div>
+
+        <!-- Mathematical Algorithm Summary for Viva -->
+        <div class="report-algorithms-note">
+          <h4><i class="fa-solid fa-calculator"></i> Methodological & Mathematical Formulation</h4>
+          <ul>
+            <li><strong>Shoulder Tilt:</strong> $\theta_s = |\arctan2(\Delta y, \Delta x)| \times \frac{180}{\pi}$ relative to horizontal plane.</li>
+            <li><strong>Eye Aspect Ratio (EAR):</strong> $EAR = \frac{||p_2 - p_6|| + ||p_3 - p_5||}{2 \times ||p_1 - p_4||}$ via 6 facial landmarks per eye.</li>
+            <li><strong>Slouch Index:</strong> $R_{slouch} = \frac{\Delta y(\text{Head}_{\text{mid}}, \text{Shoulder}_{\text{mid}})}{\text{Distance}(\text{Left Shoulder}, \text{Right Shoulder})}$ normalized for depth invariance.</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-outline" id="btn-export-csv"><i class="fa-solid fa-download"></i> Export CSV</button>
+        <button class="btn btn-secondary" id="btn-print-report"><i class="fa-solid fa-print"></i> Print / Save PDF</button>
+        <button class="btn btn-primary" id="btn-save-session-db"><i class="fa-solid fa-cloud-arrow-up"></i> Save to Database</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Custom Scripts -->
+  <script src="/static/js/alerts.js"></script>
+  <script src="/static/js/detector.js"></script>
+  <script src="/static/js/analytics.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
