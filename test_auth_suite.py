@@ -215,6 +215,20 @@ def run_multi_user_verification():
     assert "Ergonomic Health Score" in res.text
     print("[PASS] Regular user dashboard displays individual wellness stats without admin widgets")
 
+    # 9. Downloadable SQL Database & Schema Verification
+    res = client.get("/api/database/download-sql")
+    assert res.status_code == 200
+    assert "CREATE TABLE" in res.text
+    assert "INSERT INTO" in res.text
+    assert "attachment" in res.headers["content-disposition"]
+    print("[PASS] Downloadable live database SQL dump verified (/api/database/download-sql)")
+
+    res = client.get("/api/database/schema-sql")
+    assert res.status_code == 200
+    assert "CREATE TABLE IF NOT EXISTS users" in res.text
+    assert "attachment" in res.headers["content-disposition"]
+    print("[PASS] Downloadable DDL schema SQL script verified (/api/database/schema-sql)")
+
     print("\n==================================================================")
     print("  ALL 11 MULTI-USER & DATABASE REQUIREMENTS VERIFIED WITH 100%!  ")
     print("==================================================================\n")

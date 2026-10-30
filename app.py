@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from database.db import (
-    init_db, get_user_by_id, get_user_by_username_or_email,
+    get_db, init_db, get_user_by_id, get_user_by_username_or_email,
     create_user, check_duplicate_user, update_user_last_login,
     update_user_password, update_user_profile, update_user_status,
     get_all_users, get_total_users_count, get_active_users_count,
@@ -553,6 +553,35 @@ async def save_settings_endpoint(request: Request):
     data = await request.json()
     update_settings(data)
     return {"status": "success", "message": "Settings updated"}
+
+@app.get("/api/database/download-sql")
+async def download_database_sql():
+    """Exports and downloads the live SQLite database as a SQL dump file."""
+    conn = get_db()
+    sql_dump = "\n".join(conn.iterdump())
+    conn.close()
+    return Response(
+        content=sql_dump,
+        media_type="application/sql",
+        headers={"Content-Disposition": 'attachment; filename="digital_wellness_database.sql"'}
+    )
+
+@app.get("/api/database/schema-sql")
+async def download_schema_sql():
+    """Downloads the clean DDL schema SQL script."""
+    schema_path = os.path.join(BASE_DIR, "database", "schema.sql")
+    if os.path.exists(schema_path):
+        with open(schema_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    else:
+        conn = get_db()
+        content = "\n".join(conn.iterdump())
+        conn.close()
+    return Response(
+        content=content,
+        media_type="application/sql",
+        headers={"Content-Disposition": 'attachment; filename="digital_wellness_schema.sql"'}
+    )
 
 @app.get("/api/health")
 async def health_check():
