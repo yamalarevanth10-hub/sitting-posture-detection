@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Management Console | Digital Wellness Monitor</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+
+  <style>
+    .admin-container {
+      max-width: 1200px;
+      margin: 28px auto;
+      padding: 0 24px;
+    }
+
+    .admin-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .admin-stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    .admin-stat-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      box-shadow: var(--shadow-main);
+    }
+
+    .admin-stat-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background: rgba(0, 210, 255, 0.12);
+      border: 1px solid rgba(0, 210, 255, 0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.3rem;
+      color: var(--color-cyan);
+    }
+
+    .admin-stat-info span {
+      display: block;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 2px;
+    }
+
+    .admin-stat-info strong {
+      font-family: var(--font-display);
+      font-size: 1.6rem;
+      color: #fff;
+    }
+
+    .admin-table-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-main);
+    }
+
+    .admin-table-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 14px;
+    }
+
+    .admin-table-title h2 {
+      font-family: var(--font-display);
+      font-size: 1.25rem;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .admin-table-title p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .search-box {
+      position: relative;
+      width: 280px;
+    }
+
+    .search-box input {
+      width: 100%;
+      padding: 9px 14px 9px 36px;
+      background: rgba(10, 14, 24, 0.7);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: #fff;
+      font-size: 0.85rem;
+    }
+
+    .search-box input:focus {
+      outline: none;
+      border-color: var(--color-cyan);
+    }
+
+    .search-box i {
+      position: absolute;
+      left: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-dim);
+      font-size: 0.85rem;
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+    }
+
+    .users-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.84rem;
+      text-align: left;
+    }
+
+    .users-table th {
+      background: rgba(0, 0, 0, 0.35);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      white-space: nowrap;
+    }
+
+    .users-table td {
+      padding: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-main);
+      white-space: nowrap;
+    }
+
+    .users-table tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .user-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-active {
+      background: rgba(0, 255, 136, 0.12);
+      color: var(--color-good);
+      border: 1px solid rgba(0, 255, 136, 0.3);
+    }
+
+    .badge-suspended {
+      background: rgba(255, 56, 96, 0.15);
+      color: var(--color-danger);
+      border: 1px solid rgba(255, 56, 96, 0.3);
+    }
+
+    .badge-admin {
+      background: rgba(157, 78, 221, 0.18);
+      color: #c77dff;
+      border: 1px solid rgba(157, 78, 221, 0.4);
+    }
+
+    .badge-member {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .btn-toggle-status {
+      padding: 4px 10px;
+      font-size: 0.74rem;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      transition: all 0.2s ease;
+    }
+
+    .btn-suspend {
+      background: rgba(255, 56, 96, 0.15);
+      border: 1px solid rgba(255, 56, 96, 0.35);
+      color: #ff7597;
+    }
+    .btn-suspend:hover {
+      background: rgba(255, 56, 96, 0.3);
+      color: #fff;
+    }
+
+    .btn-activate {
+      background: rgba(0, 255, 136, 0.15);
+      border: 1px solid rgba(0, 255, 136, 0.35);
+      color: var(--color-good);
+    }
+    .btn-activate:hover {
+      background: rgba(0, 255, 136, 0.3);
+      color: #fff;
+    }
+
+    .security-callout {
+      margin-top: 18px;
+      padding: 12px 16px;
+      background: rgba(0, 210, 255, 0.05);
+      border: 1px solid rgba(0, 210, 255, 0.18);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    .security-callout i {
+      color: var(--color-cyan);
+      font-size: 1.1rem;
+    }
+  </style>
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <a href="/" style="text-decoration: none; display: flex; align-items: center; gap: 14px;">
+          <div class="brand-logo" style="background: linear-gradient(135deg, #9d4edd, #00d2ff);">
+            <div class="pulse-ring" style="border-color: #9d4edd;"></div>
+            <i class="fa-solid fa-shield-halved"></i>
+          </div>
+          <div class="brand-info">
+            <h1>Digital Wellness Monitor</h1>
+            <span class="project-tag" style="color: #c77dff;">
+              <i class="fa-solid fa-crown"></i> Administrator Management Console
+            </span>
+          </div>
+        </a>
+      </div>
+
+      <div class="header-right">
+        <a href="/" class="btn btn-primary">
+          <i class="fa-solid fa-gauge-high"></i> Monitoring Dashboard
+        </a>
+        <a href="/profile" class="user-nav-pill">
+          <div class="user-avatar-circle" style="background: linear-gradient(135deg, #9d4edd, #00d2ff);">A</div>
+          <span class="user-nav-name">{{ current_user.full_name }}</span>
+        </a>
+        <a href="/logout" class="btn btn-logout">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Admin Container -->
+    <main class="admin-container">
+      
+      <!-- Statistics Overview Cards (Requirement 10 & 11) -->
+      <section class="admin-stats-grid">
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="color: var(--color-cyan); border-color: rgba(0, 210, 255, 0.4);">
+            <i class="fa-solid fa-users"></i>
+          </div>
+          <div class="admin-stat-info">
+            <span>Total Registered Users</span>
+            <strong id="stat-total-users">{{ total_users }}</strong>
+          </div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="color: var(--color-good); border-color: rgba(0, 255, 136, 0.4);">
+            <i class="fa-solid fa-user-check"></i>
+          </div>
+          <div class="admin-stat-info">
+            <span>Active Users</span>
+            <strong id="stat-active-users">{{ active_users }}</strong>
+          </div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="color: #c77dff; border-color: rgba(157, 78, 221, 0.4);">
+            <i class="fa-solid fa-chart-line"></i>
+          </div>
+          <div class="admin-stat-info">
+            <span>Total Monitoring Sessions</span>
+            <strong id="stat-total-sessions">{{ total_sessions }}</strong>
+          </div>
+        </div>
+
+        <div class="admin-stat-card">
+          <div class="admin-stat-icon" style="color: var(--color-warning); border-color: rgba(255, 179, 0, 0.4);">
+            <i class="fa-solid fa-database"></i>
+          </div>
+          <div class="admin-stat-info">
+            <span>System Multi-Tenancy</span>
+            <strong style="color: var(--color-good); font-size: 1.25rem;">Enforced (100%)</strong>
+          </div>
+        </div>
+      </section>
+
+      <!-- Users Management Table -->
+      <section class="admin-table-card">
+        <div class="admin-table-header">
+          <div class="admin-table-title">
+            <h2><i class="fa-solid fa-table-list" style="color: var(--color-cyan);"></i> Registered User Accounts</h2>
+            <p>View registered accounts, registration dates, session history, and update account status.</p>
+          </div>
+          <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" id="user-search" placeholder="Search name, username, email..." oninput="filterUsers(this.value)">
+          </div>
+        </div>
+
+        <div class="table-responsive">
+          <table class="users-table" id="users-table">
+            <thead>
+              <tr>
+                <th>User ID</th>
+                <th>Full Name</th>
+                <th>Username</th>
+                <th>Email Address</th>
+                <th>Role</th>
+                <th>Registered Date</th>
+                <th>Last Login</th>
+                <th>Sessions</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in users %}
+              <tr id="user-row-{{ u.id }}" class="user-row" data-search="{{ u.full_name.lower() }} {{ u.username.lower() }} {{ u.email.lower() }}">
+                <td><strong style="font-family: var(--font-mono); color: var(--color-cyan);">#{{ u.id }}</strong></td>
+                <td><strong>{{ u.full_name }}</strong></td>
+                <td><code style="font-family: var(--font-mono); color: #d8e2f0;">@{{ u.username }}</code></td>
+                <td>{{ u.email }}</td>
+                <td>
+                  {% if u.is_admin %}
+                    <span class="user-badge badge-admin"><i class="fa-solid fa-shield-halved"></i> Admin</span>
+                  {% else %}
+                    <span class="user-badge badge-member">Member</span>
+                  {% endif %}
+                </td>
+                <td style="font-size: 0.78rem; color: var(--text-muted);">{{ u.created_at[:10] }}</td>
+                <td style="font-size: 0.78rem; color: var(--text-muted);">{{ u.last_login[:16].replace('T', ' ') if u.last_login else 'Never' }}</td>
+                <td><strong style="font-family: var(--font-mono);">{{ u.session_count }}</strong></td>
+                <td>
+                  <span id="status-badge-{{ u.id }}" class="user-badge {{ 'badge-active' if u.account_status == 'active' else 'badge-suspended' }}">
+                    {{ u.account_status }}
+                  </span>
+                </td>
+                <td>
+                  {% if not u.is_admin %}
+                    <button 
+                      id="status-btn-{{ u.id }}" 
+                      class="btn-toggle-status {{ 'btn-suspend' if u.account_status == 'active' else 'btn-activate' }}"
+                      onclick="toggleUserStatus({{ u.id }}, '{{ u.account_status }}')"
+                    >
+                      {{ 'Suspend' if u.account_status == 'active' else 'Activate' }}
+                    </button>
+                  {% else %}
+                    <span style="font-size: 0.75rem; color: var(--text-dim);"><i class="fa-solid fa-lock"></i> System</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        <div class="security-callout">
+          <i class="fa-solid fa-shield-check"></i>
+          <div>
+            <strong>Strict Security Compliance:</strong> Password hashes are generated via Argon2id with 64MB memory cost, never stored in plain text, and completely omitted from all management queries and APIs.
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    function filterUsers(query) {
+      const q = query.toLowerCase().trim();
+      const rows = document.querySelectorAll('.user-row');
+      rows.forEach(row => {
+        const text = row.getAttribute('data-search') || '';
+        row.style.display = text.includes(q) ? '' : 'none';
+      });
+    }
+
+    async function toggleUserStatus(userId, currentStatus) {
+      const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+      const btn = document.getElementById(`status-btn-${userId}`);
+      const badge = document.getElementById(`status-badge-${userId}`);
+      
+      btn.disabled = true;
+      btn.textContent = 'Updating...';
+
+      try {
+        const resp = await fetch(`/api/admin/users/${userId}/status`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: newStatus })
+        });
+        const data = await resp.json();
+
+        if (resp.ok && data.status === 'success') {
+          badge.textContent = newStatus;
+          badge.className = `user-badge ${newStatus === 'active' ? 'badge-active' : 'badge-suspended'}`;
+          
+          btn.textContent = newStatus === 'active' ? 'Suspend' : 'Activate';
+          btn.className = `btn-toggle-status ${newStatus === 'active' ? 'btn-suspend' : 'btn-activate'}`;
+          btn.setAttribute('onclick', `toggleUserStatus(${userId}, '${newStatus}')`);
+        } else {
+          alert(data.detail || 'Could not update user status.');
+          btn.textContent = currentStatus === 'active' ? 'Suspend' : 'Activate';
+        }
+      } catch (e) {
+        alert('Network error connecting to administrator endpoint.');
+        btn.textContent = currentStatus === 'active' ? 'Suspend' : 'Activate';
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>

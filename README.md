@@ -3,127 +3,179 @@
 An AI-powered computer vision and ergonomic telemetry system designed to prevent musculoskeletal disorders (text-neck, postural kyphosis, shoulder asymmetry) and Computer Vision Syndrome (eye strain, dry eyes) during prolonged computer use.
 
 > **Major Project Submission**  
-> **Technologies:** Python 3.13, FastAPI, OpenCV, MediaPipe (Pose & FaceMesh), Argon2, ItsDangerous, Web Audio API, Chart.js, HTML5 Canvas, SQLite.
+> **Technologies:** Python 3.13, FastAPI, OpenCV, MediaPipe (Pose & FaceMesh), Argon2id, ItsDangerous, Web Audio API, Chart.js, HTML5 Canvas, SQLite.
 
 ---
 
-## 🔑 Public Demo Credentials
+## 🔑 Pre-Seeded Demonstration & Administration Accounts
 
-A pre-seeded demonstration account is available for evaluators, examiners, and visitors:
+Pre-seeded accounts are provided for project evaluation, academic defense, and system administration:
 
-- **Username:** `demo`
-- **Password:** `Demo@123`
-- **One-Click Demo Button:** Available directly on the login page for instant access.
+| Role | Username | Password | Purpose |
+|---|---|---|---|
+| **Evaluator / Demo** | `demo` | `Demo@123` | Quick evaluation of personalized posture tracking & telemetry (1-click demo button on login page) |
+| **Administrator** | `admin` | `Admin@123` | Full user management console, account status toggle, and platform-wide statistics |
 
 ---
 
 ## 🌟 Key Features
 
-1. **User Authentication & Account Management**
-   - **Argon2id Cryptographic Hashing**: OWASP-recommended gold standard password hashing with unique salts.
-   - **Tamper-Proof Session Management**: Signed, timestamped, HTTP-only session cookies with expiration and "Remember Me" option (7-day persistence).
-   - **Multi-Tenant Data Isolation**: Every session, posture telemetry record, eye blink statistic, and break count is strictly linked to the authenticated user ID. One user can never see or access another user's records.
-   - **Registration with Validation**: Enforces valid email formatting and strong passwords (minimum 8 characters with letters and numbers).
-   - **Brute-Force Rate Limiting**: In-memory rate limiting blocks repeated failed login attempts.
-   - **Password Recovery**: Secure password reset mechanism with time-limited cryptographic tokens.
-   - **User Profile Dashboard**: View account details, personal lifetime wellness statistics, update name/email, and change password.
+1. **Enterprise-Grade Multi-User Architecture**
+   - **Unlimited User Registrations**: Accommodates growing numbers of users, bound only by SQLite/disk storage, with zero arbitrary limits.
+   - **Auto-Incrementing User IDs**: Every user is assigned a unique primary key `id` linked as a foreign key across all telemetry tables.
+   - **User Details Schema**: User ID, Full Name, Username (Unique), Email (Unique), Argon2id password hash, Registration Date, Last Login, and Account Status (`active` / `suspended`).
+   - **Strict Multi-Tenant Isolation**: All monitoring queries enforce `WHERE user_id = ?`, guaranteeing 100% privacy and zero data cross-leakage between accounts.
+   - **Performance Indexing**: 10 dedicated SQLite indexes for high-frequency queries on user IDs, usernames, emails, account status, and session timestamps.
 
-2. **Real-Time Sitting Posture Analysis**
+2. **Dedicated Relational Wellness Tables**
+   - **`sessions`**: Aggregate session telemetry (duration, score, good posture %, slouch %, tilt %, blinks, BPM, breaks, grade).
+   - **`posture_measurements`**: Granular periodic records of shoulder tilt, head tilt, slouch ratio, and alignment booleans.
+   - **`slouch_events`**: History of slouching incidents, baseline deviations, duration in seconds, and alert triggers.
+   - **`eye_blink_logs`**: Eye Aspect Ratio (EAR) logs, rolling blink frequencies (BPM), fatigue ratings, and microsleep alerts.
+   - **`break_reminders`**: 20-20-20 breaks, sedentary standing reminders, scheduled duration, and compliance (completed/skipped).
+   - **`wellness_reports`**: Formal viva reports, summary grades, total blinks, and evaluator/user notes.
+
+3. **Administrator User Management Console (`/admin/users`)**
+   - View all registered users with Full Name, Username, Email, Registration Date, Last Login, and Total Sessions count.
+   - Toggle account status (`Active` / `Suspended`) with instant AJAX updates.
+   - Platform-wide statistics: Total Registered Users, Active Users, and Total Platform Sessions.
+   - **Zero Credential Exposure**: Password hashes are strictly omitted from management queries, APIs, and UI views.
+
+4. **Real-Time Sitting Posture Analysis**
    - **Shoulder Tilt Detection**: Measures lateral shoulder angle $\theta_s$ relative to the horizontal plane.
    - **Head & Cervical Tilt Detection**: Detects lateral neck bending $\theta_h$ to prevent cervical spine strain.
-   - **Depth-Invariant Slouch Ratio**: Uses inter-shoulder distance normalization to detect spinal slouching and forward head posture regardless of camera distance.
+   - **Depth-Invariant Slouch Ratio**: Uses inter-shoulder distance normalization ($R_{slouch} = \Delta y_{\text{head-shoulder}} / W_{\text{shoulder}}$) to detect spinal slouching and forward head posture regardless of camera distance.
    - **Spinal Alignment Vector**: Computes vertical alignment from the head midpoint down to the mid-clavicular/shoulder axis.
    - **One-Click Baseline Calibration**: Allows the user to calibrate their custom upright sitting posture baseline (Press `[C]`).
 
-3. **Ocular Fatigue & Eye Blink Monitoring**
+5. **Ocular Fatigue & Eye Blink Monitoring**
    - **Eye Aspect Ratio (EAR)**: Computes real-time eye aperture using 6 facial landmarks per eye.
    - **Dynamic Blink Counter & BPM**: Tracks blinks per minute (BPM) over a 60-second rolling window.
    - **Dry Eye & CVS Prevention**: Alerts the user when blink frequency drops below the healthy threshold (< 10 BPM).
    - **Microsleep & Drowsiness Alert**: Detects prolonged eye closure (> 2.5 seconds) to prevent exhaustion.
 
-4. **Intelligent Ergonomic Break Alert System**
+6. **Intelligent Ergonomic Break Alert System**
    - **20-20-20 Rule Timer**: Automatic 20-minute countdown with sound alerts and a guided 20-second visual breathing circle ("Look at an object 20 feet away for 20 seconds").
    - **Prolonged Sitting Alert**: Configurable sedentary timer (30–60 mins) prompting the user to stand up, hydrate, and stretch.
    - **Slouch Duration Alert**: Triggers visual warning banners and speech prompts if bad posture persists for > 4 continuous seconds.
    - **Multi-Modal Alerts**: Web Audio tone synthesizer, SpeechSynthesis voice prompts ("Please sit upright and align your spine"), and desktop notifications.
 
-5. **Clinically Guided Desk Stretches**
-   - Interactive modal with 6 targeted exercises:
-     1. Chin Tucks (cervical spine correction)
-     2. Shoulder Shrugs & Rolls (trapezius tension release)
-     3. Seated Chest Opener (counteract rounded shoulders)
-     4. Seated Spinal Twist (thoracic mobility)
-     5. Wrist & Forearm Stretch (prevent RSI / carpal tunnel)
-     6. Eye Palming Warmth (ciliary muscle relaxation)
+7. **Clinically Guided Desk Stretches**
+   - Interactive modal with 6 targeted exercises (Chin Tucks, Shoulder Rolls, Seated Chest Opener, Torso Twist, Wrist Stretch, Eye Palming).
 
-6. **Viva-Ready Telemetry & Report Generator**
-   - Live Chart.js telemetry graphing Posture Score and Blink Rate in real time.
-   - Automatic Ergonomic Grading (`A+`, `A`, `B`, `C`, `D`).
-   - One-click PDF Print formatting and CSV data export for academic project reports.
-   - SQLite database logging session history and lifetime wellness analytics.
-
-7. **Dual Execution Modes**
-   - **Full Web Application**: High-performance, GPU-accelerated client-side processing at 30–60 FPS served by FastAPI with user authentication.
+8. **Dual Execution Modes**
+   - **Full Web Application**: GPU-accelerated client-side processing at 30–60 FPS served by FastAPI with multi-user authentication.
    - **Standalone Desktop OpenCV Application**: Python OpenCV script (`monitor_opencv.py`) displaying the camera window and overlay HUD matching the project reference screen, operating independently without requiring web login.
 
 ---
 
-## 📐 Mathematical & Algorithmic Formulations
-
-### 1. Shoulder and Head Tilt Angles
-Given left shoulder $(x_{ls}, y_{ls})$ and right shoulder $(x_{rs}, y_{rs})$:
-$$\Delta x = x_{rs} - x_{ls}, \quad \Delta y = y_{rs} - y_{ls}$$
-$$\theta_s = \left| \arctan2(\Delta y, \Delta x) \times \frac{180}{\pi} \right|$$
-Normalizing with respect to the horizontal plane gives the angular misalignment. A threshold of $\theta_s > 4.5^\circ$ flags uneven shoulders.
-
-### 2. Depth-Invariant Slouch Ratio ($R_{slouch}$)
-To prevent distance from the camera affecting slouch detection, the vertical distance between the head and shoulder midpoint is normalized by the Euclidean shoulder width:
-$$\text{Head}_{\text{mid}} = \left(\frac{x_{le} + x_{re}}{2}, \frac{y_{le} + y_{re}}{2}\right), \quad \text{Shoulder}_{\text{mid}} = \left(\frac{x_{ls} + x_{rs}}{2}, \frac{y_{ls} + y_{rs}}{2}\right)$$
-$$W_{shoulder} = \sqrt{(x_{rs} - x_{ls})^2 + (y_{rs} - y_{ls})^2}$$
-$$R_{slouch} = \frac{y_{\text{Shoulder}_{\text{mid}}} - y_{\text{Head}_{\text{mid}}}}{W_{shoulder}}$$
-When a user slouches or leans forward, their head drops vertically relative to their shoulders, reducing $R_{slouch}$. When $R_{slouch} < R_{base} \times (1 - \text{tolerance})$, a slouch event is flagged.
-
-### 3. Eye Aspect Ratio (EAR)
-For each eye, 6 landmarks ($p_1, \dots, p_6$) define the eye boundary:
-$$EAR = \frac{||p_2 - p_6|| + ||p_3 - p_5||}{2 \times ||p_1 - p_4||}$$
-- **Eyes Open:** $EAR \approx 0.25 - 0.35$
-- **Blink Trigger:** $EAR < 0.20$ (with debounced state transition: Open $\to$ Closed $\to$ Open)
-
----
-
-## 🏗️ System Architecture
+## 🗄️ Database Schema & Performance Indexing
 
 ```mermaid
-flowchart TD
-    User([User]) --> Auth{Authenticated?}
-    Auth -- No --> LoginPage[Login & Registration / Demo Login]
-    LoginPage --> AuthVerify[Argon2 Password Verify & Cookie Issuance]
-    AuthVerify --> Auth
-    Auth -- Yes --> Dashboard[Protected Monitoring Dashboard]
+erDiagram
+    USERS ||--o{ SESSIONS : "has many"
+    USERS ||--o{ POSTURE_MEASUREMENTS : "has many"
+    USERS ||--o{ SLOUCH_EVENTS : "has many"
+    USERS ||--o{ EYE_BLINK_LOGS : "has many"
+    USERS ||--o{ BREAK_REMINDERS : "has many"
+    USERS ||--o{ WELLNESS_REPORTS : "has many"
+    USERS ||--o{ PASSWORD_RESETS : "has many"
 
-    Cam[Webcam Video Stream] --> MP[MediaPipe Vision Pipeline]
-    MP --> Pose[Pose Landmarker\nShoulders, Eyes, Spine]
-    MP --> Face[FaceMesh Landmarker\nEye Contours & Iris]
-    
-    Pose --> AngleCalc[Angle & Geometry Engine\nShoulder Tilt, Head Tilt]
-    Pose --> SlouchCalc[Slouch Normalization Engine\nHead-to-Shoulder Ratio]
-    Face --> EARCalc[Ocular Fatigue Engine\nEye Aspect Ratio & Blink Counter]
-    
-    AngleCalc --> PostureEval{Ergonomic Health\nEvaluator}
-    SlouchCalc --> PostureEval
-    EARCalc --> PostureEval
-    
-    PostureEval --> HUD[HTML5 Canvas Overlay HUD\nExact Reference Layout]
-    PostureEval --> Telemetry[Real-Time Dashboard & Chart.js]
-    PostureEval --> AlertSys[Alert & Reminder Engine]
-    
-    AlertSys --> WebAudio[Web Audio Synthesizer\nChimes & Alerts]
-    AlertSys --> Voice[SpeechSynthesis\nSpoken Reminders]
-    AlertSys --> BreakModal[20-20-20 Eye Break Modal\nGuided Breathing Circle]
-    
-    Telemetry --> DB[(SQLite Database\nwellness_sessions.db\nUsers & Multi-Tenant Sessions)]
-    Telemetry --> Report[Viva Presentation Report\nPDF Print & CSV Export]
+    USERS {
+        int id PK
+        string full_name
+        string username UK
+        string email UK
+        string password_hash
+        string created_at
+        string last_login
+        string account_status
+        int is_admin
+    }
+
+    SESSIONS {
+        int id PK
+        int user_id FK
+        string timestamp
+        int duration_seconds
+        real avg_posture_score
+        real good_posture_pct
+        real slouch_pct
+        real tilt_pct
+        int total_blinks
+        real avg_blink_rate
+        int breaks_completed
+        string ergonomic_grade
+    }
+
+    POSTURE_MEASUREMENTS {
+        int id PK
+        int session_id FK
+        int user_id FK
+        string timestamp
+        real shoulder_tilt
+        real head_tilt
+        real slouch_ratio
+        int is_good_posture
+    }
+
+    SLOUCH_EVENTS {
+        int id PK
+        int session_id FK
+        int user_id FK
+        string timestamp
+        real slouch_ratio
+        real baseline_ratio
+        real duration_seconds
+        int alert_triggered
+    }
+
+    EYE_BLINK_LOGS {
+        int id PK
+        int session_id FK
+        int user_id FK
+        string timestamp
+        real ear_value
+        real blink_rate_bpm
+        string fatigue_level
+        int microsleep_detected
+    }
+
+    BREAK_REMINDERS {
+        int id PK
+        int session_id FK
+        int user_id FK
+        string timestamp
+        string break_type
+        int scheduled_duration_sec
+        int completed
+        int skipped
+    }
+
+    WELLNESS_REPORTS {
+        int id PK
+        int session_id FK
+        int user_id FK
+        string timestamp
+        string report_title
+        string grade
+        real overall_score
+        int total_blinks
+        int breaks_taken
+    }
 ```
+
+### Dedicated SQLite Indexes:
+- `idx_users_username` on `users(username)`
+- `idx_users_email` on `users(email)`
+- `idx_users_status` on `users(account_status)`
+- `idx_sessions_user_id` on `sessions(user_id)`
+- `idx_sessions_timestamp` on `sessions(timestamp)`
+- `idx_posture_user_session` on `posture_measurements(user_id, session_id)`
+- `idx_slouch_user` on `slouch_events(user_id)`
+- `idx_blink_user` on `eye_blink_logs(user_id)`
+- `idx_break_user` on `break_reminders(user_id)`
+- `idx_reports_user` on `wellness_reports(user_id)`
 
 ---
 
@@ -131,7 +183,7 @@ flowchart TD
 
 ```
 D:\DigitalWellnessMonitor/
-├── app.py                      # FastAPI Backend, Auth Middleware & REST APIs
+├── app.py                      # FastAPI Backend, Auth Middleware, Admin Console & REST APIs
 ├── auth.py                     # Argon2 Hashing, Session Serialization & Rate Limiting
 ├── test_auth_suite.py          # Automated verification test suite (100% test pass)
 ├── monitor_opencv.py           # Standalone Python OpenCV monitor (matches reference screen)
@@ -140,14 +192,14 @@ D:\DigitalWellnessMonitor/
 ├── run_web.bat                 # 1-Click launcher for Web Application
 ├── run_desktop.bat             # 1-Click launcher for Desktop OpenCV script
 ├── database/
-│   ├── db.py                   # SQLite database manager & multi-tenant queries
-│   └── wellness_sessions.db    # SQLite sessions database with users & sessions tables
+│   ├── db.py                   # Multi-tenant SQLite manager, migrations & granular logging
+│   └── wellness_sessions.db    # SQLite database with 6 relational tables & 10 indexes
 ├── models/
 │   ├── pose_landmarker_lite.task
 │   └── face_landmarker.task
 ├── static/
 │   ├── css/
-│   │   └── style.css           # Cyber-Glassmorphism dark theme, auth styling & print rules
+│   │   └── style.css           # Cyber-Glassmorphism dark theme, auth & admin styling
 │   ├── js/
 │   │   ├── detector.js         # MediaPipe Pose & FaceMesh vector calculations
 │   │   ├── alerts.js           # Audio synthesizer, voice speech, break timers
@@ -159,6 +211,7 @@ D:\DigitalWellnessMonitor/
     ├── forgot_password.html    # Academic Dev-Mode Password Recovery Page
     ├── reset_password.html     # Secure Password Reset with Token Page
     ├── profile.html            # User Profile & Lifetime Statistics Dashboard
+    ├── admin_users.html        # Administrator Console with User Management & Stats
     └── index.html              # Main Protected Real-Time Ergonomics Dashboard
 ```
 
@@ -166,7 +219,7 @@ D:\DigitalWellnessMonitor/
 
 ## 🚀 How to Run
 
-### Method 1: Web Application (Full System with Authentication)
+### Method 1: Web Application (With Multi-User Authentication)
 1. Double click **`run_web.bat`** (or open a terminal in `D:\DigitalWellnessMonitor` and run):
    ```cmd
    python app.py
@@ -175,7 +228,10 @@ D:\DigitalWellnessMonitor/
    ```
    http://localhost:8000
    ```
-3. Sign in using the **One-Click Demo Button** (or credentials `demo` / `Demo@123`), or click **Create Account** to register your own account.
+3. Sign in using:
+   - **Evaluator Access:** Click **One-Click Demo Sign In** (or `demo` / `Demo@123`).
+   - **Administrator Access:** Sign in as `admin` / `Admin@123` to access the User Management Console (`/admin/users`).
+   - **New Registration:** Register a new user at `/register`.
 4. Allow webcam access when prompted by the browser.
 5. Sit upright and press **`[C]`** or click **Calibrate [C]** to calibrate your personal baseline.
 
@@ -192,30 +248,13 @@ To run the standalone OpenCV camera window shown in your reference image without
 
 ---
 
-## ⌨️ Keyboard Shortcuts (Web App)
-
-| Key | Action |
-|---|---|
-| **`[C]`** | Calibrate Upright Baseline |
-| **`[B]`** | Start 20-20-20 Eye Break with Guided Breathing |
-| **`[Space]`** | Pause / Resume Camera |
-| **`[ESC]`** | Close Active Modal Dialog |
-
----
-
 ## 🎓 Viva Questions & Answers for Major Project Defense
 
-1. **Q: How does the authentication system protect user passwords?**  
-   *A: Passwords are never stored in plain text. They are hashed using Argon2id with 64MB memory cost, 3 iterations, and 16-byte random salts. Argon2 is the winner of the Password Hashing Competition and OWASP's highest-recommended algorithm, offering superior resistance against GPU/ASIC brute-force attacks compared to MD5 or SHA.*
+1. **Q: How does the system achieve strict multi-tenant data isolation in SQLite?**  
+   *A: Every session, posture measurement, slouch event, blink log, and break record contains a `user_id` foreign key referencing the `users` table. All database queries enforce parameterized `WHERE user_id = ?` filtering based on the cryptographically verified session token in the HTTP-only cookie. One user's data is completely inaccessible to other users.*
 
-2. **Q: How is session security and multi-tenancy maintained?**  
-   *A: Sessions are managed via cryptographically signed HTTP-only cookies (`wellness_session`) generated using `itsdangerous.URLSafeTimedSerializer`. The cookies cannot be accessed or stolen via JavaScript (`XSS protection`). All session and analytics queries enforce `WHERE user_id = ?`, guaranteeing strict tenant isolation.*
+2. **Q: Why are database indexes added and which columns are indexed?**  
+   *A: High-frequency queries (such as looking up users by username/email during login, filtering sessions by `user_id`, sorting by `timestamp`, and joining telemetry logs) are optimized using B-tree indexing. We created 10 targeted indexes (e.g. `idx_users_username`, `idx_sessions_user_id`, `idx_posture_user_session`), reducing query time complexity from $O(N)$ full-table scans to $O(\log N)$ index lookups.*
 
-3. **Q: What prevents brute-force login attacks on user accounts?**  
-   *A: The system implements an IP and identifier rate limiter that tracks failed login attempts. If 5 consecutive failures occur within the lockout window, subsequent login requests are blocked for 60 seconds with an HTTP 429 response.*
-
-4. **Q: Why is depth invariance important in posture detection?**  
-   *A: If you only measure absolute pixel distances between head and shoulders, moving closer to the camera or leaning in would artificially change the metric. By dividing the vertical head-to-shoulder displacement by the inter-shoulder Euclidean distance, the ratio becomes scale-invariant and invariant to camera distance.*
-
-5. **Q: What is Eye Aspect Ratio (EAR) and how is a blink registered?**  
-   *A: EAR is the ratio of vertical distances between upper and lower eyelids divided by twice the horizontal eye width using 6 landmarks. During open eyes, EAR remains between $0.25 - 0.35$. When eyelids close, EAR drops below $\approx 0.20$. A state-machine tracks this transition with hysteresis to prevent false double-counting.*
+3. **Q: How is security ensured in the administrator user management console?**  
+   *A: Access to `/admin/users` and `/api/admin/*` is strictly restricted to authenticated users with `is_admin = 1`. In the user management interface, password hashes are never selected from the database or transmitted across APIs, completely eliminating credential leak risks.*

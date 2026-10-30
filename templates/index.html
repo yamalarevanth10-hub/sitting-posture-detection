@@ -76,6 +76,11 @@
         </button>
 
         <!-- User Profile & Logout -->
+        {% if user and user.is_admin %}
+        <a href="/admin/users" class="btn btn-outline" style="border-color: rgba(157, 78, 221, 0.4); color: #c77dff;" title="Administrator User Management Console">
+          <i class="fa-solid fa-crown"></i> Admin
+        </a>
+        {% endif %}
         <a href="/profile" class="user-nav-pill" title="View Profile & Lifetime Analytics">
           <div class="user-avatar-circle">{{ user.full_name[0].upper() if user else 'U' }}</div>
           <span class="user-nav-name">{{ user.full_name if user else 'User' }}</span>
@@ -85,6 +90,23 @@
         </a>
       </div>
     </header>
+
+    {% if user and user.is_admin %}
+    <!-- Administrator Multi-User Statistics Banner (Requirement 10 & 11) -->
+    <div class="admin-dashboard-banner" style="background: rgba(157, 78, 221, 0.08); border-bottom: 1px solid rgba(157, 78, 221, 0.25); padding: 8px 28px; display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; color: #d8e2f0;">
+      <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+        <span style="color: #c77dff; font-weight: 700;"><i class="fa-solid fa-shield-halved"></i> Administrator Statistics:</span>
+        <span><i class="fa-solid fa-users" style="color: var(--color-cyan);"></i> Total Registered Users: <strong style="color: #fff; font-family: var(--font-mono);">{{ total_registered_users }}</strong></span>
+        <span><i class="fa-solid fa-user-check" style="color: var(--color-good);"></i> Active Users: <strong style="color: #fff; font-family: var(--font-mono);">{{ active_users }}</strong></span>
+        <span><i class="fa-solid fa-chart-line" style="color: #c77dff;"></i> Total Monitored Sessions: <strong style="color: #fff; font-family: var(--font-mono);">{{ total_sessions_global }}</strong></span>
+      </div>
+      <div>
+        <a href="/admin/users" style="color: var(--color-cyan); text-decoration: none; font-weight: 600;">
+          Open User Management Console <i class="fa-solid fa-arrow-right"></i>
+        </a>
+      </div>
+    </div>
+    {% endif %}
 
     <!-- Main Workspace Grid -->
     <main class="main-content">

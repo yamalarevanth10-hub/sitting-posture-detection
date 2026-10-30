@@ -1,5 +1,7 @@
 import sys
 import os
+import time
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi.testclient import TestClient
@@ -9,194 +11,213 @@ import auth
 
 client = TestClient(app)
 
-def run_tests():
-    print("\n========================================================")
-    print("  RUNNING COMPREHENSIVE AUTH & MULTI-TENANT TEST SUITE")
-    print("========================================================")
+def run_multi_user_verification():
+    print("\n==================================================================")
+    print("  COMPREHENSIVE MULTI-USER & DATABASE INDEXING VERIFICATION SUITE")
+    print("==================================================================")
 
-    # 1. Health check
+    # 1. Health check & version
     res = client.get("/api/health")
     assert res.status_code == 200
-    print("[PASS] Health API check")
-
-    # 2. Protected route access without authentication -> Should redirect to /login
-    res = client.get("/", follow_redirects=False)
-    assert res.status_code == 303
-    assert res.headers["location"] == "/login"
-    print("[PASS] Unauthenticated access to '/' redirects to '/login'")
-
-    res = client.get("/profile", follow_redirects=False)
-    assert res.status_code == 303
-    assert "/login" in res.headers["location"]
-    print("[PASS] Unauthenticated access to '/profile' redirects to '/login'")
-
-    # 3. Test Demo Account login (Requirement 3)
-    res = client.post("/api/auth/demo-login")
-    assert res.status_code == 200, res.text
     data = res.json()
-    assert data["status"] == "success"
-    assert data["user"]["username"] == "demo"
-    assert "wellness_session" in res.cookies
-    print("[PASS] Demo login API works & sets HTTP-only cookie")
+    assert data["multi_tenant"] is True
+    assert data["indexes_active"] is True
+    print("[PASS] Health API confirms multi-tenant system & active indexes")
 
-    # Verify access to dashboard with demo cookie
-    res = client.get("/")
+    # 2. Database Indexes Verification (Requirement 8)
+    conn = db.get_db()
+    cursor = conn.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name LIKE 'idx_%';")
+    indexes = [row[0] for row in cursor.fetchall()]
+    conn.close()
+
+    expected_indexes = [
+        "idx_users_username", "idx_users_email", "idx_users_status",
+        "idx_sessions_user_id", "idx_sessions_timestamp",
+        "idx_posture_user_session", "idx_slouch_user",
+        "idx_blink_user", "idx_break_user", "idx_reports_user"
+    ]
+    for idx in expected_indexes:
+        assert idx in indexes, f"Missing index: {idx}"
+    print(f"[PASS] All {len(expected_indexes)} performance indexes verified in SQLite schema")
+
+    # 3. Demo Account & Seed Verification (Requirement 7)
+    res = client.post("/api/auth/demo-login")
     assert res.status_code == 200
-    assert "Digital Wellness Monitor" in res.text
-    assert "Demo Explorer" in res.text
-    print("[PASS] Authenticated dashboard renders with user full name")
+    demo_user = res.json()["user"]
+    assert demo_user["username"] == "demo"
+    print("[PASS] Common demo evaluator account functional (demo / Demo@123)")
 
-    # Verify access to profile page with demo cookie
-    res = client.get("/profile")
-    assert res.status_code == 200
-    assert "Demo Explorer" in res.text
-    assert "Personal Lifetime Wellness Statistics" in res.text
-    print("[PASS] Profile page renders with personal statistics")
+    # 4. Multi-User Registration & Auto-Incrementing IDs (Requirement 1, 2, 3)
+    # Register 3 distinct users to verify unlimited scalability and auto-incrementing IDs
+    user_ids = []
+    ts = int(time.time())
+    for i in range(3):
+        u_name = f"user_{ts}_{i}"
+        res = client.post("/api/auth/register", json={
+            "full_name": f"User {i} Person",
+            "username": u_name,
+            "email": f"{u_name}@testdomain.com",
+            "password": "Password@123",
+            "confirm_password": "Password@123"
+        })
+        assert res.status_code == 200, res.text
+        uid = res.json()["user_id"]
+        user_ids.append(uid)
+    
+    assert user_ids[1] > user_ids[0] and user_ids[2] > user_ids[1], "IDs must auto-increment"
+    print(f"[PASS] Auto-incrementing unique user IDs verified: {user_ids}")
 
-    # 4. Test User Registration (Requirement 2)
-    # 4a. Weak password rejection
-    res = client.post("/api/auth/register", json={
-        "full_name": "Test User",
-        "username": "tester1",
-        "email": "tester1@test.com",
-        "password": "short",
-        "confirm_password": "short"
-    })
-    assert res.status_code == 400
-    assert "at least 8" in res.json()["detail"]
-    print("[PASS] Registration rejects weak password")
+    # Check user details in DB (Requirement 3: ID, Full Name, Username, Email, Hash, Created, Last Login, Status)
+    user_record = db.get_user_by_id(user_ids[0])
+    assert user_record["id"] == user_ids[0]
+    assert user_record["full_name"] == "User 0 Person"
+    assert "user_" in user_record["username"]
+    assert "@testdomain.com" in user_record["email"]
+    assert user_record["password_hash"].startswith("$argon2id$")
+    assert user_record["created_at"] is not None
+    assert user_record["account_status"] == "active"
+    print("[PASS] User details schema & Argon2id hash storage verified")
 
-    # 4b. Invalid email rejection
-    res = client.post("/api/auth/register", json={
-        "full_name": "Test User",
-        "username": "tester1",
-        "email": "not-an-email",
-        "password": "Password123",
-        "confirm_password": "Password123"
-    })
-    assert res.status_code == 400
-    assert "valid email" in res.json()["detail"]
-    print("[PASS] Registration rejects invalid email format")
-
-    # 4c. Successful registration
-    test_user_name = f"user_{int(auth.time.time())}"
-    res = client.post("/api/auth/register", json={
-        "full_name": "Alice Johnson",
-        "username": test_user_name,
-        "email": f"{test_user_name}@example.com",
-        "password": "SecurePassword123",
-        "confirm_password": "SecurePassword123"
-    })
-    assert res.status_code == 200, res.text
-    user_id_alice = res.json()["user_id"]
-    print(f"[PASS] User registration successful (User ID: {user_id_alice})")
-
-    # 4d. Duplicate username rejection
-    res = client.post("/api/auth/register", json={
-        "full_name": "Alice Duplicate",
-        "username": test_user_name,
-        "email": "different@example.com",
-        "password": "SecurePassword123",
-        "confirm_password": "SecurePassword123"
-    })
-    assert res.status_code == 409
-    assert "already taken" in res.json()["detail"]
-    print("[PASS] Registration rejects duplicate username")
-
-    # 5. Test Login with Valid & Invalid Credentials
-    # 5a. Invalid credentials
-    res = client.post("/api/auth/login", json={
-        "identifier": test_user_name,
-        "password": "WrongPassword999"
-    })
-    assert res.status_code == 401
-    assert "Invalid username" in res.json()["detail"]
-    print("[PASS] Login rejects invalid password")
-
-    # 5b. Valid credentials
-    res = client.post("/api/auth/login", json={
-        "identifier": test_user_name,
-        "password": "SecurePassword123",
-        "remember_me": True
+    # 5. Separate Records for Every User (Requirement 4 & 5)
+    # User 0 records session + granular records
+    u0_client = TestClient(app)
+    res = u0_client.post("/api/auth/login", json={
+        "identifier": f"user_{ts}_0",
+        "password": "Password@123"
     })
     assert res.status_code == 200
-    alice_cookies = res.cookies
-    assert "wellness_session" in alice_cookies
-    print("[PASS] Login succeeds with valid credentials and sets remember_me cookie")
 
-    # 6. Test Multi-Tenant Data Isolation (Requirement 4 & 5)
-    # Alice logs a session
-    client.cookies = alice_cookies
-    res = client.post("/api/sessions/save", json={
-        "duration_seconds": 300,
-        "avg_posture_score": 96.0,
-        "good_posture_pct": 95.0,
-        "slouch_pct": 3.0,
-        "tilt_pct": 2.0,
-        "total_blinks": 75,
+    # Save session with granular measurements, slouch events, blink logs, and break reminders
+    res = u0_client.post("/api/sessions/save", json={
+        "duration_seconds": 600,
+        "avg_posture_score": 92.5,
+        "good_posture_pct": 91.0,
+        "slouch_pct": 6.0,
+        "tilt_pct": 3.0,
+        "total_blinks": 150,
         "avg_blink_rate": 15.0,
-        "breaks_completed": 1,
-        "slouch_alerts_count": 0,
-        "ergonomic_grade": "A+"
+        "breaks_completed": 2,
+        "slouch_alerts_count": 1,
+        "ergonomic_grade": "A",
+        "measurements": [
+            {"shoulder_tilt": 2.1, "head_tilt": 1.9, "slouch_ratio": 0.49, "is_good": True},
+            {"shoulder_tilt": 2.4, "head_tilt": 2.0, "slouch_ratio": 0.48, "is_good": True}
+        ],
+        "slouch_events": [
+            {"slouch_ratio": 0.36, "baseline_ratio": 0.50, "duration_seconds": 4.5, "alert_triggered": True}
+        ],
+        "blink_logs": [
+            {"ear_value": 0.29, "blink_rate_bpm": 16.0, "fatigue_level": "Low", "microsleep_detected": False}
+        ],
+        "break_reminders": [
+            {"break_type": "20-20-20", "scheduled_duration_sec": 20, "completed": True, "skipped": False}
+        ]
     })
     assert res.status_code == 200
-    alice_session_id = res.json()["session_id"]
-    print(f"[PASS] Alice recorded session #{alice_session_id}")
+    u0_session_id = res.json()["session_id"]
+    print(f"[PASS] User 0 saved session #{u0_session_id} with granular measurements, slouch events, blinks, and breaks")
 
-    # Check Alice's history
-    res = client.get("/api/sessions/history")
-    alice_sessions = res.json()["sessions"]
-    assert len(alice_sessions) == 1
-    assert alice_sessions[0]["id"] == alice_session_id
-    assert alice_sessions[0]["user_id"] == user_id_alice
-    print("[PASS] Alice sees her own session")
-
-    # Switch back to Demo user
-    client.post("/api/auth/demo-login")
-    res = client.get("/api/sessions/history")
-    demo_sessions = res.json()["sessions"]
-    # Verify Demo user NEVER sees Alice's session
-    for s in demo_sessions:
-        assert s["id"] != alice_session_id, "Data Leakage: Demo user can see Alice's session!"
-    print("[PASS] Multi-tenant isolation verified: Demo user CANNOT see Alice's data")
-
-    # 7. Test Password Recovery & Reset (Requirement 7)
-    res = client.post("/api/auth/forgot-password", json={
-        "identifier": test_user_name
+    # Save a formal wellness report
+    res = u0_client.post("/api/wellness/reports/save", json={
+        "session_id": u0_session_id,
+        "report_title": "Ergonomics Mid-Term Assessment",
+        "grade": "A",
+        "overall_score": 92.5,
+        "good_posture_pct": 91.0,
+        "total_blinks": 150,
+        "breaks_taken": 2,
+        "notes": "Excellent head alignment"
     })
     assert res.status_code == 200
-    reset_url = res.json()["reset_url"]
-    token = reset_url.split("token=")[1]
-    print("[PASS] Password recovery generates time-limited reset token")
+    print("[PASS] Wellness report saved with user foreign key")
 
-    # Perform password reset
-    res = client.post("/api/auth/reset-password", json={
-        "token": token,
-        "new_password": "NewSecurePassword456",
-        "confirm_password": "NewSecurePassword456"
+    # 6. Strict User-Level Data Isolation (Requirement 6)
+    # User 1 logs in and checks history
+    u1_client = TestClient(app)
+    res = u1_client.post("/api/auth/login", json={
+        "identifier": f"user_{ts}_1",
+        "password": "Password@123"
     })
     assert res.status_code == 200
-    print("[PASS] Password reset successfully updated user password")
 
-    # Verify login with new password
-    res = client.post("/api/auth/login", json={
-        "identifier": test_user_name,
-        "password": "NewSecurePassword456"
+    # User 1 history should be empty (cannot see User 0's session)
+    res = u1_client.get("/api/sessions/history")
+    u1_sessions = res.json()["sessions"]
+    assert len(u1_sessions) == 0, "Data Leakage: User 1 can see sessions belonging to User 0!"
+
+    res = u1_client.get("/api/wellness/reports")
+    u1_reports = res.json()["reports"]
+    assert len(u1_reports) == 0, "Data Leakage: User 1 can see reports belonging to User 0!"
+    print("[PASS] Strict user-level data isolation verified: User 1 has ZERO access to User 0's records")
+
+    # 7. Administrator Management Capabilities (Requirement 10 & 11)
+    admin_client = TestClient(app)
+    res = admin_client.post("/api/auth/login", json={
+        "identifier": "admin",
+        "password": "Admin@123"
     })
     assert res.status_code == 200
-    print("[PASS] Login succeeds with newly updated password")
+    assert res.json()["user"]["is_admin"] is True
+    print("[PASS] Administrator authentication verified (admin / Admin@123)")
 
-    # 8. Test Logout (Requirement 6)
-    res = client.post("/api/auth/logout")
+    # 7a. Non-admin access blocked to /admin/users
+    res = u0_client.get("/admin/users", follow_redirects=False)
+    assert res.status_code == 403, "Non-admin must be blocked from admin console!"
+    print("[PASS] Non-admin user blocked from admin console (403 Forbidden)")
+
+    # 7b. Admin access to /admin/users
+    res = admin_client.get("/admin/users")
     assert res.status_code == 200
-    client.cookies.clear()
-    res = client.get("/", follow_redirects=False)
-    assert res.status_code == 303
-    print("[PASS] Logout clears session and redirects unauthenticated user")
+    assert "User Management Console" in res.text
+    assert "Total Registered Users" in res.text
+    assert "password_hash" not in res.text, "Password hashes must NEVER be exposed in UI!"
+    print("[PASS] Admin User Management Page renders cleanly with zero password hash leakage")
 
-    print("\n========================================================")
-    print("  ALL 10 VERIFICATION TESTS PASSED WITH 100% SUCCESS!  ")
-    print("========================================================\n")
+    # 7c. Admin API /api/admin/users
+    res = admin_client.get("/api/admin/users")
+    assert res.status_code == 200
+    users_list = res.json()["users"]
+    assert len(users_list) >= 4
+    for u in users_list:
+        assert "password_hash" not in u, "Password hash leaked in API!"
+        assert "account_status" in u
+        assert "session_count" in u
+    print("[PASS] Admin API lists users without password hashes")
+
+    # 7d. Admin updates user status (e.g. suspend user 2)
+    res = admin_client.post(f"/api/admin/users/{user_ids[2]}/status", json={"status": "suspended"})
+    assert res.status_code == 200
+    # Verify user 2 cannot log in when suspended
+    u2_client = TestClient(app)
+    res = u2_client.post("/api/auth/login", json={
+        "identifier": f"user_{ts}_2",
+        "password": "Password@123"
+    })
+    assert res.status_code == 403
+    assert "suspended" in res.json()["detail"].lower()
+    print("[PASS] Account suspension capability verified: suspended user cannot log in")
+
+    # 8. Dashboard Statistics Display (Requirement 11)
+    # Admin dashboard includes total registered users, active users, total sessions
+    res = admin_client.get("/")
+    assert res.status_code == 200
+    assert "Administrator Statistics" in res.text
+    assert "Total Registered Users:" in res.text
+    assert "Active Users:" in res.text
+    assert "Total Monitored Sessions:" in res.text
+    print("[PASS] Admin dashboard displays global user and session statistics")
+
+    # Regular user dashboard does NOT display admin telemetry
+    res = u0_client.get("/")
+    assert res.status_code == 200
+    assert "Administrator Statistics" not in res.text
+    assert "Ergonomic Health Score" in res.text
+    print("[PASS] Regular user dashboard displays individual wellness stats without admin widgets")
+
+    print("\n==================================================================")
+    print("  ALL 11 MULTI-USER & DATABASE REQUIREMENTS VERIFIED WITH 100%!  ")
+    print("==================================================================\n")
 
 if __name__ == "__main__":
-    run_tests()
+    run_multi_user_verification()

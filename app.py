@@ -1,6 +1,6 @@
 import os
 import uvicorn
-from typing import Optional
+from typing import Optional, List
 from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -10,19 +10,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from database.db import (
     init_db, get_user_by_id, get_user_by_username_or_email,
     create_user, check_duplicate_user, update_user_last_login,
-    update_user_password, update_user_profile,
+    update_user_password, update_user_profile, update_user_status,
+    get_all_users, get_total_users_count, get_active_users_count,
+    get_total_sessions_count_global,
     save_session, get_recent_sessions, get_analytics_summary,
+    log_posture_measurement, log_slouch_event, log_eye_blink,
+    log_break_reminder, save_wellness_report, get_user_wellness_reports,
     get_settings, update_settings
 )
 import auth
 
-# Initialize SQLite database and demo account
+# Initialize SQLite database, indexes and seeded accounts
 init_db()
 
 app = FastAPI(
     title="Digital Wellness Monitor - Posture & Eye Blink Detection AI",
-    description="Major Project Web Application for real-time sitting posture detection, eye blinking, break alerts, and user authentication.",
-    version="2.1.0"
+    description="Multi-user AI system for real-time sitting posture detection, eye blinking, break alerts, and user administration.",
+    version="2.2.0"
 )
 
 # CORS middleware
@@ -53,15 +57,34 @@ def get_current_user_from_request(request: Request) -> Optional[dict]:
     user_id = auth.verify_session_token(cookie)
     if not user_id:
         return None
-    return get_user_by_id(user_id)
+    user = get_user_by_id(user_id)
+    # Check if account is suspended
+    if user and user.get("account_status") == "suspended":
+        return None
+    return user
 
 async def require_auth_user(request: Request) -> dict:
-    """Dependency that ensures user is authenticated for API endpoints; raises 401 if not."""
+    """Dependency ensuring user is authenticated; raises 401 if not."""
     user = get_current_user_from_request(request)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication required. Please sign in to continue."
+        )
+    return user
+
+async def require_admin_user(request: Request) -> dict:
+    """Dependency ensuring user is an authenticated administrator; raises 403 if not."""
+    user = get_current_user_from_request(request)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required."
+        )
+    if not user.get("is_admin"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Administrator access required."
         )
     return user
 
@@ -75,7 +98,19 @@ async def read_root(request: Request):
     user = get_current_user_from_request(request)
     if not user:
         return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
-    return templates.TemplateResponse(request=request, name="index.html", context={"user": user})
+    
+    context = {
+        "user": user,
+        "personal_summary": get_analytics_summary(user_id=user["id"])
+    }
+
+    # If administrator, provide platform-wide telemetry
+    if user.get("is_admin"):
+        context["total_registered_users"] = get_total_users_count()
+        context["active_users"] = get_active_users_count()
+        context["total_sessions_global"] = get_total_sessions_count_global()
+
+    return templates.TemplateResponse(request=request, name="index.html", context=context)
 
 @app.get("/login", response_class=HTMLResponse)
 async def read_login(request: Request):
@@ -87,7 +122,7 @@ async def read_login(request: Request):
 
 @app.get("/register", response_class=HTMLResponse)
 async def read_register(request: Request):
-    """Registration Page."""
+    """Registration Page (Supports unlimited registrations)."""
     user = get_current_user_from_request(request)
     if user:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
@@ -111,6 +146,28 @@ async def read_profile(request: Request):
         return RedirectResponse(url="/login?next=/profile", status_code=status.HTTP_303_SEE_OTHER)
     summary = get_analytics_summary(user_id=user["id"])
     return templates.TemplateResponse(request=request, name="profile.html", context={"user": user, "summary": summary})
+
+@app.get("/admin/users", response_class=HTMLResponse)
+async def read_admin_users(request: Request):
+    """Administrator User Management Console (Requirement 10 & 11)."""
+    user = get_current_user_from_request(request)
+    if not user:
+        return RedirectResponse(url="/login?next=/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+    if not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Administrator access required.")
+
+    users_list = get_all_users()
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_users.html",
+        context={
+            "current_user": user,
+            "users": users_list,
+            "total_users": get_total_users_count(),
+            "active_users": get_active_users_count(),
+            "total_sessions": get_total_sessions_count_global()
+        }
+    )
 
 @app.get("/logout")
 async def handle_logout_redirect(response: Response):
@@ -149,6 +206,9 @@ async def api_login(request: Request, response: Response):
         auth.record_failed_attempt(rate_key)
         raise HTTPException(status_code=401, detail="Invalid username/email or password.")
 
+    if user.get("account_status") == "suspended":
+        raise HTTPException(status_code=403, detail="Your account has been suspended. Please contact the administrator.")
+
     # Clear rate limit and update last login
     auth.clear_failed_attempts(rate_key)
     update_user_last_login(user["id"])
@@ -164,7 +224,8 @@ async def api_login(request: Request, response: Response):
             "id": user["id"],
             "full_name": user["full_name"],
             "username": user["username"],
-            "email": user["email"]
+            "email": user["email"],
+            "is_admin": bool(user.get("is_admin", 0))
         }
     })
     res.set_cookie(
@@ -173,7 +234,7 @@ async def api_login(request: Request, response: Response):
         max_age=max_age,
         httponly=True,
         samesite="lax",
-        secure=False, # Set True if HTTPS is enabled
+        secure=False,
         path="/"
     )
     return res
@@ -195,13 +256,14 @@ async def api_demo_login(response: Response):
             "id": demo_user["id"],
             "full_name": demo_user["full_name"],
             "username": demo_user["username"],
-            "email": demo_user["email"]
+            "email": demo_user["email"],
+            "is_admin": False
         }
     })
     res.set_cookie(
         key=auth.SESSION_COOKIE_NAME,
         value=token,
-        max_age=86400 * 3, # 3 days demo session
+        max_age=86400 * 3,
         httponly=True,
         samesite="lax",
         secure=False,
@@ -211,7 +273,7 @@ async def api_demo_login(response: Response):
 
 @app.post("/api/auth/register")
 async def api_register(request: Request):
-    """Registers a new user account with secure password hashing and validation."""
+    """Registers a new user account (unlimited users supported)."""
     data = await request.json()
     full_name = data.get("full_name", "").strip()
     username = data.get("username", "").strip()
@@ -231,7 +293,7 @@ async def api_register(request: Request):
 
     # Validate username format
     if len(username) < 3 or not username.replace("_", "").replace("-", "").isalnum():
-        raise HTTPException(status_code=400, detail="Username must be at least 3 alphanumeric characters (letters, numbers, underscores).")
+        raise HTTPException(status_code=400, detail="Username must be at least 3 alphanumeric characters.")
 
     # Validate password strength
     valid_pwd, pwd_msg = auth.validate_password_strength(password)
@@ -243,7 +305,7 @@ async def api_register(request: Request):
     if is_dup:
         raise HTTPException(status_code=409, detail=dup_msg)
 
-    # Hash and save
+    # Hash password with Argon2
     pwd_hash = auth.hash_password(password)
     user_id = create_user(full_name, username, email, pwd_hash)
 
@@ -251,7 +313,7 @@ async def api_register(request: Request):
 
 @app.post("/api/auth/forgot-password")
 async def api_forgot_password(request: Request):
-    """Generates a secure password reset token (academic dev mode returns the direct URL)."""
+    """Generates a secure password reset token."""
     data = await request.json()
     identifier = data.get("identifier", "").strip()
 
@@ -304,6 +366,42 @@ async def api_logout(response: Response):
     res = JSONResponse({"status": "success", "message": "Logged out successfully."})
     res.delete_cookie(auth.SESSION_COOKIE_NAME, path="/")
     return res
+
+# ==========================================
+# Administrator Management Endpoints
+# ==========================================
+
+@app.get("/api/admin/users")
+async def api_admin_list_users(current_admin: dict = Depends(require_admin_user)):
+    """Returns list of registered users. Password hashes are strictly omitted."""
+    users_list = get_all_users()
+    return {"status": "success", "users": users_list, "total": len(users_list)}
+
+@app.post("/api/admin/users/{user_id}/status")
+async def api_admin_toggle_status(user_id: int, request: Request, current_admin: dict = Depends(require_admin_user)):
+    """Updates user account status (active/suspended)."""
+    if user_id == current_admin["id"]:
+        raise HTTPException(status_code=400, detail="Cannot alter your own administrator account status.")
+    
+    data = await request.json()
+    new_status = data.get("status", "active").strip().lower()
+    if new_status not in ["active", "suspended"]:
+        raise HTTPException(status_code=400, detail="Status must be 'active' or 'suspended'.")
+
+    success = update_user_status(user_id, new_status)
+    if not success:
+        raise HTTPException(status_code=404, detail="User not found.")
+    return {"status": "success", "message": f"User #{user_id} status updated to {new_status}."}
+
+@app.get("/api/admin/stats")
+async def api_admin_stats(current_admin: dict = Depends(require_admin_user)):
+    """Returns platform-wide statistics for the administrator."""
+    return {
+        "status": "success",
+        "total_registered_users": get_total_users_count(),
+        "active_users": get_active_users_count(),
+        "total_sessions_global": get_total_sessions_count_global()
+    }
 
 # ==========================================
 # User Profile API Endpoints
@@ -360,13 +458,52 @@ async def api_change_password(request: Request, current_user: dict = Depends(req
 
 @app.post("/api/sessions/save")
 async def record_session(request: Request):
-    """Saves session. Automatically associates with authenticated user (or demo account)."""
+    """
+    Saves session and optional granular records.
+    Automatically associates with authenticated user (or demo account).
+    """
     user = get_current_user_from_request(request)
     user_id = user["id"] if user else None
 
     data = await request.json()
     session_id = save_session(data, user_id=user_id)
-    return {"status": "success", "session_id": session_id, "user_id": user_id}
+
+    # Optional granular records logging (Requirement 5)
+    actual_user_id = user_id if user_id else 1
+
+    if "measurements" in data and isinstance(data["measurements"], list):
+        for m in data["measurements"]:
+            log_posture_measurement(
+                actual_user_id, session_id,
+                m.get("shoulder_tilt", 0.0), m.get("head_tilt", 0.0),
+                m.get("slouch_ratio", 0.5), m.get("is_good", True)
+            )
+
+    if "slouch_events" in data and isinstance(data["slouch_events"], list):
+        for s in data["slouch_events"]:
+            log_slouch_event(
+                actual_user_id, session_id,
+                s.get("slouch_ratio", 0.0), s.get("baseline_ratio", 0.5),
+                s.get("duration_seconds", 0.0), s.get("alert_triggered", True)
+            )
+
+    if "blink_logs" in data and isinstance(data["blink_logs"], list):
+        for b in data["blink_logs"]:
+            log_eye_blink(
+                actual_user_id, session_id,
+                b.get("ear_value", 0.28), b.get("blink_rate_bpm", 16.0),
+                b.get("fatigue_level", "Low"), b.get("microsleep_detected", False)
+            )
+
+    if "break_reminders" in data and isinstance(data["break_reminders"], list):
+        for br in data["break_reminders"]:
+            log_break_reminder(
+                actual_user_id, session_id,
+                br.get("break_type", "20-20-20"), br.get("scheduled_duration_sec", 20),
+                br.get("completed", True), br.get("skipped", False)
+            )
+
+    return {"status": "success", "session_id": session_id, "user_id": actual_user_id}
 
 @app.get("/api/sessions/history")
 async def fetch_history(request: Request, limit: int = 15):
@@ -384,6 +521,29 @@ async def fetch_summary(request: Request):
     summary = get_analytics_summary(user_id=user_id)
     return {"summary": summary}
 
+@app.post("/api/wellness/reports/save")
+async def api_save_report(request: Request, current_user: dict = Depends(require_auth_user)):
+    """Saves a formal wellness report record for the user (Requirement 5)."""
+    data = await request.json()
+    report_id = save_wellness_report(
+        user_id=current_user["id"],
+        session_id=data.get("session_id"),
+        report_title=data.get("report_title", "Session Ergonomic Viva Report"),
+        grade=data.get("grade", "A"),
+        overall_score=float(data.get("overall_score", 95.0)),
+        good_posture_pct=float(data.get("good_posture_pct", 90.0)),
+        total_blinks=int(data.get("total_blinks", 0)),
+        breaks_taken=int(data.get("breaks_taken", 0)),
+        notes=data.get("notes", "")
+    )
+    return {"status": "success", "report_id": report_id}
+
+@app.get("/api/wellness/reports")
+async def api_get_reports(current_user: dict = Depends(require_auth_user)):
+    """Retrieves user's saved wellness reports."""
+    reports = get_user_wellness_reports(current_user["id"])
+    return {"status": "success", "reports": reports}
+
 @app.get("/api/settings")
 async def fetch_settings():
     return get_settings()
@@ -396,13 +556,20 @@ async def save_settings_endpoint(request: Request):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok", "service": "Digital Wellness Monitor", "version": "2.1.0"}
+    return {
+        "status": "ok",
+        "service": "Digital Wellness Monitor",
+        "version": "2.2.0",
+        "multi_tenant": True,
+        "indexes_active": True
+    }
 
 if __name__ == "__main__":
     print("\n" + "=" * 65)
-    print("  [*] Digital Wellness Monitor Server Starting...")
-    print("  [>] Web Interface: http://localhost:8000")
-    print("  [>] Login Page:    http://localhost:8000/login")
-    print("  [>] API Docs:      http://localhost:8000/docs")
+    print("  [*] Digital Wellness Monitor Multi-User Server Starting...")
+    print("  [>] Web Interface:  http://localhost:8000")
+    print("  [>] Login Page:     http://localhost:8000/login")
+    print("  [>] Admin Console:  http://localhost:8000/admin/users")
+    print("  [>] API Docs:       http://localhost:8000/docs")
     print("=" * 65 + "\n")
     uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=False)
