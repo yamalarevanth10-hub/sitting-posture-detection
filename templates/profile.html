@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>User Profile | Digital Wellness Monitor</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="dark-theme">
+  <div class="app-layout">
+    
+    <!-- Top Navigation Bar -->
+    <header class="app-header">
+      <div class="header-left">
+        <a href="/" style="text-decoration: none; display: flex; align-items: center; gap: 14px;">
+          <div class="brand-logo">
+            <div class="pulse-ring"></div>
+            <i class="fa-solid fa-person-burst"></i>
+          </div>
+          <div class="brand-info">
+            <h1>Digital Wellness Monitor</h1>
+            <span class="project-tag"><i class="fa-solid fa-graduation-cap"></i> Major Project Edition &bull; User Profile</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="header-right">
+        <a href="/" class="btn btn-outline">
+          <i class="fa-solid fa-gauge-high"></i> Back to Monitor
+        </a>
+        <a href="/logout" class="btn btn-logout">
+          <i class="fa-solid fa-right-from-bracket"></i> Logout
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Profile Container -->
+    <main class="profile-container">
+      
+      <!-- Feedback Alert Box -->
+      <div id="profile-alert" class="alert-box">
+        <i id="alert-icon" class="fa-solid fa-circle-check"></i>
+        <span id="alert-msg"></span>
+      </div>
+
+      <!-- User Card Banner -->
+      <section class="profile-card">
+        <div class="profile-header-banner">
+          <div class="profile-avatar-large">
+            {{ user.full_name[0].upper() }}
+          </div>
+          <div class="profile-meta">
+            <h2>{{ user.full_name }}</h2>
+            <p><i class="fa-solid fa-at"></i> {{ user.username }} &bull; <i class="fa-solid fa-envelope"></i> {{ user.email }}</p>
+            <p style="margin-top: 4px; font-size: 0.78rem; color: var(--text-dim);">
+              <i class="fa-regular fa-calendar"></i> Member since {{ user.created_at[:10] }} &bull; 
+              <i class="fa-regular fa-clock"></i> Last login {{ user.last_login[:16].replace('T', ' ') if user.last_login else 'N/A' }}
+            </p>
+          </div>
+        </div>
+
+        <!-- Personal Lifetime Telemetry Stats -->
+        <h3 style="font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 14px; color: #fff;">
+          <i class="fa-solid fa-chart-pie" style="color: var(--color-cyan); margin-right: 8px;"></i>
+          Personal Lifetime Wellness Statistics
+        </h3>
+        
+        <div class="profile-stats-grid">
+          <div class="p-stat-box">
+            <span class="p-stat-label">Total Sessions</span>
+            <div class="p-stat-val">{{ summary.total_sessions }}</div>
+          </div>
+
+          <div class="p-stat-box">
+            <span class="p-stat-label">Time Monitored</span>
+            <div class="p-stat-val">{{ (summary.total_duration_seconds // 3600) }}h {{ ((summary.total_duration_seconds % 3600) // 60) }}m</div>
+          </div>
+
+          <div class="p-stat-box">
+            <span class="p-stat-label">Avg Posture Score</span>
+            <div class="p-stat-val" style="color: var(--color-good);">{{ "%.1f"|format(summary.overall_avg_score) }}%</div>
+          </div>
+
+          <div class="p-stat-box">
+            <span class="p-stat-label">Total Eye Blinks</span>
+            <div class="p-stat-val" style="color: var(--color-cyan);">{{ summary.total_blinks_all }}</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Account Settings & Password Update Grid -->
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+        
+        <!-- Edit Profile Form -->
+        <section class="profile-card">
+          <h3 style="font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 16px; color: #fff;">
+            <i class="fa-solid fa-user-pen" style="color: var(--color-cyan); margin-right: 8px;"></i>
+            Edit Profile Information
+          </h3>
+
+          <form id="edit-profile-form" class="auth-form" onsubmit="return handleProfileUpdate(event);">
+            <div class="form-group">
+              <label for="edit_full_name">Full Name</label>
+              <div class="input-icon-wrap">
+                <i class="fa-solid fa-id-card field-icon"></i>
+                <input type="text" id="edit_full_name" value="{{ user.full_name }}" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="edit_email">Email Address</label>
+              <div class="input-icon-wrap">
+                <i class="fa-solid fa-envelope field-icon"></i>
+                <input type="email" id="edit_email" value="{{ user.email }}" required>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-save-profile" class="btn btn-primary" style="margin-top: 10px;">
+              <i class="fa-solid fa-floppy-disk"></i> Save Profile Changes
+            </button>
+          </form>
+        </section>
+
+        <!-- Change Password Form -->
+        <section class="profile-card">
+          <h3 style="font-family: var(--font-display); font-size: 1.05rem; margin-bottom: 16px; color: #fff;">
+            <i class="fa-solid fa-key" style="color: var(--color-warning); margin-right: 8px;"></i>
+            Change Password
+          </h3>
+
+          <form id="change-pwd-form" class="auth-form" onsubmit="return handlePasswordChange(event);">
+            <div class="form-group">
+              <label for="current_password">Current Password</label>
+              <div class="input-icon-wrap">
+                <i class="fa-solid fa-lock field-icon"></i>
+                <input type="password" id="current_password" placeholder="Enter existing password" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="new_pwd">New Password</label>
+              <div class="input-icon-wrap">
+                <i class="fa-solid fa-lock-open field-icon"></i>
+                <input type="password" id="new_pwd" placeholder="Min 8 chars, 1 letter, 1 number" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="confirm_new_pwd">Confirm New Password</label>
+              <div class="input-icon-wrap">
+                <i class="fa-solid fa-shield-halved field-icon"></i>
+                <input type="password" id="confirm_new_pwd" placeholder="Re-enter new password" required>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-change-pwd" class="btn btn-secondary" style="margin-top: 10px;">
+              <i class="fa-solid fa-shield-check"></i> Update Password
+            </button>
+          </form>
+        </section>
+
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    function showProfileAlert(message, type = 'success') {
+      const box = document.getElementById('profile-alert');
+      const msg = document.getElementById('alert-msg');
+      const icon = document.getElementById('alert-icon');
+      
+      box.className = `alert-box active ${type}`;
+      msg.textContent = message;
+      
+      if (type === 'success') {
+        icon.className = 'fa-solid fa-circle-check';
+      } else {
+        icon.className = 'fa-solid fa-triangle-exclamation';
+      }
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    async function handleProfileUpdate(e) {
+      e.preventDefault();
+      const fullName = document.getElementById('edit_full_name').value.trim();
+      const email = document.getElementById('edit_email').value.trim();
+      const btn = document.getElementById('btn-save-profile');
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Saving...';
+
+      try {
+        const resp = await fetch('/api/profile/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ full_name: fullName, email: email })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.status === 'success') {
+          showProfileAlert('Profile information updated successfully!', 'success');
+        } else {
+          showProfileAlert(data.detail || 'Could not update profile.', 'error');
+        }
+      } catch (err) {
+        showProfileAlert('Network error while saving profile.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Save Profile Changes';
+      }
+      return false;
+    }
+
+    async function handlePasswordChange(e) {
+      e.preventDefault();
+      const curPwd = document.getElementById('current_password').value;
+      const newPwd = document.getElementById('new_pwd').value;
+      const confPwd = document.getElementById('confirm_new_pwd').value;
+      const btn = document.getElementById('btn-change-pwd');
+
+      if (newPwd !== confPwd) {
+        showProfileAlert('New passwords do not match.', 'error');
+        return false;
+      }
+
+      if (newPwd.length < 8 || !/[A-Za-z]/.test(newPwd) || !/\d/.test(newPwd)) {
+        showProfileAlert('Password must be at least 8 characters with at least one letter and one number.', 'error');
+        return false;
+      }
+
+      btn.disabled = true;
+      btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Updating...';
+
+      try {
+        const resp = await fetch('/api/profile/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ current_password: curPwd, new_password: newPwd, confirm_password: confPwd })
+        });
+        const data = await resp.json();
+        if (resp.ok && data.status === 'success') {
+          showProfileAlert('Password updated successfully!', 'success');
+          document.getElementById('change-pwd-form').reset();
+        } else {
+          showProfileAlert(data.detail || 'Could not change password.', 'error');
+        }
+      } catch (err) {
+        showProfileAlert('Network error while changing password.', 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-shield-check"></i> Update Password';
+      }
+      return false;
+    }
+  </script>
+</body>
+</html>
